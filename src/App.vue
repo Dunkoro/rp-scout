@@ -148,17 +148,16 @@ const getNativeTags = (title) => {
   return [...bracketTags, ...parenTags].map(t => t.replace(/[\[\]\(\)]/g, '').trim());
 };
 
+// A "Loose" filter that checks titles, users, and tags
 const isBlacklisted = (post) => {
-  if (!activeFilters.value.length) return false;
+  if (!activeFilters.value || activeFilters.value.length === 0) return false;
   
-  const nativeTags = getNativeTags(post.title);
-  
+  // Build a "Wall of Text" to search through
   const searchableText = [
-    post.author,
-    post.title,
-    post.source,
-    ...nativeTags, // Include extracted title tags
-    ...(post.ai ? [
+    post?.author,
+    post?.title,
+    post?.source,
+    ...(post?.ai ? [
       post.ai.pairing,
       post.ai.platform,
       post.ai.fandom,
@@ -167,44 +166,52 @@ const isBlacklisted = (post) => {
   ].map(t => String(t || '').toLowerCase());
 
   return activeFilters.value.some(filter => {
+    if (!filter) return false;
     const f = filter.toLowerCase().trim();
     return searchableText.some(text => text.includes(f));
   });
 };
 
+// Defensive Computed Property
+const filteredPosts = computed(() => {
+  const currentPosts = posts.value || [];
+  if (activeFilters.value?.length === 0) return currentPosts;
+  return currentPosts.filter(post => !isBlacklisted(post));
+});
+
 const fetchAndAnalyze = async () => {
   if (!apiKey.value) return;
   isLoading.value = true;
-  posts.value = [];
+  isError.value = false;
+  posts.value = []; // Clear current feed
   
   try {
     const [redditRaw, bmRaw] = await Promise.all([
-      fetchPostsFromSubreddits(subs.value),
-      scrapeBarbermonger(bmIds.value)
+      fetchPostsFromSubreddits(subs.value).catch(() => []),
+      scrapeBarbermonger(bmIds.value).catch(() => [])
     ]);
     
-    // Enrich posts with native tags before filtering
-    const enriched = [...redditRaw, ...bmRaw].map(p => ({
-        ...p,
-        nativeTags: getNativeTags(p.title)
-    }));
-
-    // Pre-Filter Step
-    const cleanRaw = enriched.filter(post => !isBlacklisted(post));
+    // PRE-FILTER: Instantly drop forbidden titles/users
+    const allPosts = [...(redditRaw || []), ...(bmRaw || [])];
+    const preFiltered = allPosts.filter(post => !isBlacklisted(post));
     
-    const toAnalyze = cleanRaw.filter(p => !p.isStub);
-    const stubs = cleanRaw.filter(p => p.isStub);
+    const toAnalyze = preFiltered.filter(p => !p.isStub);
+    const stubs = preFiltered.filter(p => p.isStub);
     
+    // Show stubs (BM posts) immediately
     posts.value = stubs; 
 
+    // Analyze Reddit posts
     await analyzePostsWithGemini(toAnalyze, apiKey.value, (chunk) => {
-      const finalChunk = chunk.filter(post => !isBlacklisted(post));
-      posts.value = [...posts.value, ...finalChunk];
+      // Re-filter after AI adds new tags
+      const safeChunk = (chunk || []).filter(post => !isBlacklisted(post));
+      posts.value = [...posts.value, ...safeChunk];
     });
 
-    statusMessage.value = 'Updated.';
+    statusMessage.value = 'Sync Complete';
   } catch (e) {
-    statusMessage.value = "Error: " + e.message;
+    statusMessage.value = "Connection Error";
+    isError.value = true;
   } finally {
     isLoading.value = false;
   }
