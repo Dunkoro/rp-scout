@@ -9,31 +9,13 @@
       </div>
 
       <div class="input-group">
-        <label>Global Blacklist</label>
-        <div class="toggle-group">
-          <button 
-            @click="toggleFilter('Fandom (Canon)')" 
-            :class="{ 'active-red': activeFilters.includes('Fandom (Canon)') }"
-          >
-            Block Canon
-          </button>
-          <button 
-            @click="toggleFilter('Fandom (OCs)')" 
-            :class="{ 'active-red': activeFilters.includes('Fandom (OCs)') }"
-          >
-            Block Fandom OCs
-          </button>
-        </div>
-      </div>
-
-      <div class="input-group">
-        <label>Block Username or Tag</label>
+        <label>Blacklist (Tags, Users, Fandoms)</label>
         <div class="flex-row">
-          <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" type="text" placeholder="e.g. u/BadUser">
+          <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" type="text" placeholder="Add custom block...">
           <button class="add-btn" @click="addCustomFilter">+</button>
         </div>
         <div class="mini-tag-list">
-          <span v-for="tag in customFiltersOnly" :key="tag" class="mini-tag" @click="toggleFilter(tag)">
+          <span v-for="tag in activeFilters" :key="tag" class="mini-tag" @click="toggleFilter(tag)">
             {{ tag }} &times;
           </span>
         </div>
@@ -55,7 +37,7 @@
       <div id="results-count">
         {{ filteredPosts.length }} visible / {{ posts.length }} total
         <span v-if="posts.length > filteredPosts.length" class="hidden-count">
-          ({{ posts.length - filteredPosts.length }} filtered)
+          ({{ posts.length - filteredPosts.length }} hidden)
         </span>
       </div>
       
@@ -69,11 +51,18 @@
               <span class="tag pairing" @click="toggleFilter(post.ai.pairing)">{{ post.ai.pairing }}</span>
               <span class="tag platform" @click="toggleFilter(post.ai.platform)">{{ post.ai.platform }}</span>
               <span class="tag type" @click="toggleFilter(post.ai.type)">{{ post.ai.type }}</span>
+              
               <span class="tag fandom" 
-                    :class="post.ai.fandom ? post.ai.fandom.replace(/\s+/g, '-').toLowerCase() : ''" 
+                    :class="{
+                      'original': post.ai.fandom === 'Original',
+                      'fandom-ocs': post.ai.fandom === 'Fandom (OCs)',
+                      'fandom-canon': post.ai.fandom === 'Fandom (Canon)',
+                      'is-celebrity': post.ai.fandom === 'Celebrity'
+                    }" 
                     @click="toggleFilter(post.ai.fandom)">
                 {{ post.ai.fandom }}
               </span>
+              
               <span v-for="tag in post.ai.tags" :key="tag" class="tag genre" @click="toggleFilter(tag)">
                 {{ tag }}
               </span>
@@ -106,9 +95,7 @@ const isError = ref(false);
 const activeFilters = ref([]);
 const newBlacklistTag = ref('');
 
-// --- PERSISTENCE & AUTO-LOAD ---
 onMounted(() => {
-  // 1. Load saved data
   const savedKey = localStorage.getItem('gemini_api_key');
   if (savedKey) apiKey.value = savedKey;
 
@@ -118,26 +105,14 @@ onMounted(() => {
   const savedFilters = localStorage.getItem('rp_scout_blacklist');
   if (savedFilters) activeFilters.value = JSON.parse(savedFilters);
 
-  // 2. AUTO-EXECUTE if we have an API key
-  if (apiKey.value && subs.value) {
-    fetchAndAnalyze();
-  } else if (!apiKey.value) {
-    statusMessage.value = 'Welcome! Enter your API key to start scouting.';
-  }
+  if (apiKey.value && subs.value) fetchAndAnalyze();
 });
 
-// Watchers for saving changes
 watch(apiKey, (val) => localStorage.setItem('gemini_api_key', val));
 watch(subs, (val) => localStorage.setItem('rp_scout_subs', val));
 watch(activeFilters, (val) => {
   localStorage.setItem('rp_scout_blacklist', JSON.stringify(val));
 }, { deep: true });
-
-// --- FILTER LOGIC ---
-const customFiltersOnly = computed(() => {
-  const globals = ['Fandom (Canon)', 'Fandom (OCs)'];
-  return activeFilters.value.filter(f => !globals.includes(f));
-});
 
 const toggleFilter = (tag) => {
   if (!tag) return;
@@ -167,36 +142,29 @@ const filteredPosts = computed(() => {
         ...(post.ai.tags || [])
       ] : [])
     ];
+    // Hide post if ANY of its tags are in our unified blacklist
     return !activeFilters.value.some(f => postTags.includes(f));
   });
 });
 
-// --- CORE EXECUTION ---
 const fetchAndAnalyze = async () => {
   if (!subs.value || !apiKey.value) return;
-  
   isLoading.value = true;
-  isError.value = false;
   posts.value = [];
-  
   try {
     buttonText.value = 'Fetching...';
-    statusMessage.value = 'Scouting Reddit...';
-    
     const rawPosts = await fetchPostsFromSubreddits(subs.value);
-    
     buttonText.value = 'AI Reading...';
     await analyzePostsWithGemini(rawPosts, apiKey.value, (chunk) => {
       posts.value = [...posts.value, ...chunk];
     });
-    
-    statusMessage.value = 'All posts analyzed.';
+    statusMessage.value = 'Analysis complete.';
   } catch (e) {
     statusMessage.value = e.message;
     isError.value = true;
   } finally {
     isLoading.value = false;
-    buttonText.value = ''; // Reset for the button label logic
+    buttonText.value = '';
   }
 };
 </script>
@@ -206,35 +174,31 @@ const fetchAndAnalyze = async () => {
 body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; }
 #app-container { display: flex; height: 100vh; }
 
-/* Sidebar UI */
 #sidebar { width: 320px; padding: 20px; background: #181818; border-right: 1px solid #333; overflow-y: auto; }
 .input-group { margin-bottom: 20px; }
 label { font-size: 0.75rem; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 8px; display: block; }
 input { width: 100%; padding: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
 
-.toggle-group { display: flex; gap: 5px; }
-.toggle-group button { flex: 1; padding: 8px; font-size: 0.7rem; background: #333; color: #aaa; border: 1px solid #444; border-radius: 4px; cursor: pointer; }
-.toggle-group button.active-red { background: var(--danger); color: white; border-color: #ff5252; }
-
 .flex-row { display: flex; gap: 5px; }
-.add-btn { background: #444; color: white; border: none; padding: 0 15px; border-radius: 4px; cursor: pointer; }
+.add-btn { background: #444; color: white; border: none; padding: 0 15px; border-radius: 4px; cursor: pointer; font-size: 1.2rem; }
 
-.mini-tag-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-.mini-tag { font-size: 0.65rem; background: #2a2a2a; padding: 3px 8px; border-radius: 10px; border: 1px solid #444; cursor: pointer; color: #ff5252; }
+.mini-tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mini-tag { font-size: 0.65rem; background: #2a2a2a; padding: 4px 10px; border-radius: 12px; border: 1px solid #444; cursor: pointer; color: #ff5252; font-weight: bold; }
+.mini-tag:hover { background: var(--danger); color: white; }
 
 .main-action { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
 
-/* Feed UI */
 #feed { flex-grow: 1; padding: 20px; overflow-y: auto; }
 .hidden-count { color: var(--danger); font-size: 0.8rem; margin-left: 10px; }
 .rp-card { background: var(--card); border-radius: 8px; padding: 20px; margin-bottom: 20px; border-left: 4px solid var(--accent); }
 
-/* Tag Colors */
 .tag { background: #333; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer; }
+.tag:hover { filter: brightness(1.2); }
 .tag.author { background: #5c2d91; }
 .tag.fandom.original { background: #424242; }
-.tag.fandom.fandom-(ocs) { background: #f57f17; }
-.tag.fandom.fandom-(canon) { background: var(--danger); border: 1px solid #ff5252; }
+.tag.fandom.fandom-ocs { background: #f57f17; }
+.tag.fandom.fandom-canon { background: var(--danger); border: 1px solid #ff5252; }
+.tag.fandom.is-celebrity { background: #6a1b9a; border: 1px solid #9c27b0; }
 
 .ai-box { background: #252525; padding: 15px; border-radius: 6px; border: 1px solid #333; margin-bottom: 10px; }
 .tag-container { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
