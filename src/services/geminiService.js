@@ -5,7 +5,7 @@ export const analyzePostsWithGemini = async (posts, apiKey) => {
     if (!posts || posts.length === 0) return [];
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // Batching: Send only the first 600 characters of each post to save tokens
     const postSnippets = posts.map((p, index) => 
