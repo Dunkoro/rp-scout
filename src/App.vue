@@ -78,7 +78,7 @@ const fetchAndAnalyze = async () => {
   
   isLoading.value = true;
   isError.value = false;
-  posts.value = [];
+  posts.value = []; // Clear the old feed instantly
   
   try {
     buttonText.value = 'Fetching Reddit...';
@@ -87,7 +87,11 @@ const fetchAndAnalyze = async () => {
     
     buttonText.value = 'AI is reading...';
     statusMessage.value = `Analyzing ${rawPosts.length} posts...`;
-    posts.value = await analyzePostsWithGemini(rawPosts, apiKey.value);
+    
+    // Pass a callback function that immediately adds the new chunk to the screen
+    await analyzePostsWithGemini(rawPosts, apiKey.value, (newlyAnalyzedChunk) => {
+        posts.value = [...posts.value, ...newlyAnalyzedChunk];
+    });
     
     statusMessage.value = 'Done!';
   } catch (error) {
@@ -95,6 +99,7 @@ const fetchAndAnalyze = async () => {
     isError.value = true;
   } finally {
     isLoading.value = false;
+    buttonText.value = 'Scout Posts';
   }
 };
 </script>
