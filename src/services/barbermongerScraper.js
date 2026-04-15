@@ -6,7 +6,7 @@ export const scrapeBarbermonger = async (forumIds) => {
         const cleanId = id.trim();
         const targetUrl = `https://barbermonger.me/index.php?showforum=${cleanId}`;
         
-        // Switching to a different proxy provider to sneak past Cloudflare
+        // CodeTabs is currently the most reliable "stealth" proxy for Cloudflare
         const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
         
         try {
@@ -15,19 +15,18 @@ export const scrapeBarbermonger = async (forumIds) => {
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            // Look specifically for Jcink thread links
             const links = doc.querySelectorAll('a[href*="showtopic="]'); 
             const results = [];
 
             links.forEach(link => {
                 const title = link.textContent.trim();
-                // Filter out navigation links and pinned threads
                 if (title && title.length > 5 && !title.includes('Pinned:')) {
+                    const fullUrl = link.href.includes('http') ? link.href : `https://barbermonger.me/${link.getAttribute('href')}`;
                     results.push({
-                        id: link.href,
+                        id: fullUrl,
                         title: title,
                         author: 'BM User',
-                        url: link.href.includes('http') ? link.href : `https://barbermonger.me/${link.getAttribute('href')}`,
+                        url: fullUrl,
                         source: `BM:${cleanId}`,
                         content: '',
                         isStub: true 
@@ -36,6 +35,7 @@ export const scrapeBarbermonger = async (forumIds) => {
             });
             return results;
         } catch (e) {
+            console.warn(`[BM] Scrape failed for forum ${cleanId}`);
             return [];
         }
     });
