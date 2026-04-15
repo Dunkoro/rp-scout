@@ -16,7 +16,7 @@ export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const CHUNK_SIZE = 5; 
+    const CHUNK_SIZE = 3; // Smaller batches are less likely to trigger 503s
     const chunks = chunkArray(posts, CHUNK_SIZE);
 
     for (let i = 0; i < chunks.length; i++) {
@@ -49,9 +49,7 @@ export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => 
         `;
 
         try {
-            // Google Free Tier Limit: 15 Requests Per Minute. 
-            // We must wait 4 seconds between batches to avoid the 503 error.
-            if (i > 0) await new Promise(resolve => setTimeout(resolve, 4000));
+            if (i > 0) await new Promise(resolve => setTimeout(resolve, 6000));
             
             const result = await model.generateContent(prompt);
             const responseText = result.response.text();
