@@ -142,4 +142,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .tag.platform { background: #1976d2; }
 .tag.type { background: #388e3c; }
 .tag.genre { background: #f57c00; }
+.tag.fandom.is-original { background: #424242; } /* Safe / Dark Grey */
+.tag.fandom.is-fandom-oc { background: #f57f17; color: white; } /* Caution / Amber */
+.tag.fandom.is-fandom-canon { background: #b71c1c; border: 1px solid #ff5252; } /* Skip / Bright Red */
 </style>
