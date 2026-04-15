@@ -46,3 +46,19 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  verify-live:
+    runs-on: ubuntu-latest
+    needs: deploy # Only runs if the 'deploy' job succeeded
+    steps:
+      - name: Check Live URL Status
+        run: |
+          # Wait 10 seconds for GitHub's CDN to refresh
+          sleep 10
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" https://dunkoro.github.io/rp-scout/)
+          if [ $STATUS -ne 200 ]; then
+            echo "Deployment Failed! URL returned $STATUS"
+            exit 1
+          else
+            echo "Deployment Verified! Site is live at 200 OK."
+          fi
