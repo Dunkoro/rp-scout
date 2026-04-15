@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Helper function to slice the 25 posts into smaller groups
 const chunkArray = (array, size) => {
     const chunked = [];
     for (let i = 0; i < array.length; i += size) {
@@ -9,17 +8,16 @@ const chunkArray = (array, size) => {
     return chunked;
 };
 
-export const analyzePostsWithGemini = async (posts, apiKey) => {
+// Notice the new third parameter: onChunkComplete
+export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => {
     if (!apiKey) throw new Error("No API key provided.");
     if (!posts || posts.length === 0) return [];
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // Process exactly 5 posts at a time to prevent 503 Server Overload errors
     const CHUNK_SIZE = 5; 
     const chunks = chunkArray(posts, CHUNK_SIZE);
-    let allAnalyzedPosts = [];
 
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -45,8 +43,9 @@ export const analyzePostsWithGemini = async (posts, apiKey) => {
         `;
 
         try {
-            // Add a 1.5 second pause between chunks so Google doesn't think we are a spam bot
-            if (i > 0) await new Promise(resolve => setTimeout(resolve, 1500));
+            // Google Free Tier Limit: 15 Requests Per Minute. 
+            // We must wait 4 seconds between batches to avoid the 503 error.
+            if (i > 0) await new Promise(resolve => setTimeout(resolve, 4000));
             
             const result = await model.generateContent(prompt);
             const responseText = result.response.text();
@@ -55,18 +54,19 @@ export const analyzePostsWithGemini = async (posts, apiKey) => {
             const aiData = JSON.parse(cleanJsonString);
 
             const analyzedChunk = chunk.map((post, index) => ({ ...post, ai: aiData[index] || {} }));
-            allAnalyzedPosts = [...allAnalyzedPosts, ...analyzedChunk];
+            
+            // FIRE THE DATA TO THE UI IMMEDIATELY
+            if (onChunkComplete) onChunkComplete(analyzedChunk);
 
         } catch (error) {
             console.error(`Gemini Error on batch ${i + 1}:`, error);
-            // Graceful degradation: If a batch fails, render the cards anyway but mark them as failed
             const failedChunk = chunk.map(post => ({ 
                 ...post, 
                 ai: { summary: "AI failed to read this post (Server Busy).", tags: [] }
             }));
-            allAnalyzedPosts = [...allAnalyzedPosts, ...failedChunk];
+            
+            // IF IT FAILS, STILL FIRE THE RAW POSTS TO THE UI
+            if (onChunkComplete) onChunkComplete(failedChunk);
         }
     }
-
-    return allAnalyzedPosts;
 };
