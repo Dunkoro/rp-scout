@@ -1,40 +1,48 @@
-export const fetchBarbermongerPosts = async (rssUrl) => {
-    if (!rssUrl) return [];
+export const fetchBarbermongerPosts = async (forumIds) => {
+    if (!forumIds) return [];
     
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`;
-    
-    try {
-        const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+    // Split the IDs and create a fetch request for each one
+    const ids = forumIds.split('+');
+    const fetchPromises = ids.map(async (id) => {
+        const cleanId = id.trim();
+        const rssUrl = `https://barbermonger.me/index.php?act=rssout&id=${cleanId}`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`;
         
-        const text = await response.text();
-        
-        // Browser-native XML parsing
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(text, "text/xml");
-        const items = xmlDoc.querySelectorAll("item");
-
-        return Array.from(items).map(item => {
-            const title = item.querySelector("title")?.textContent || "No Title";
-            const link = item.querySelector("link")?.textContent || "";
-            const rawContent = item.querySelector("description")?.textContent || "";
+        try {
+            const response = await fetch(proxyUrl);
+            if (!response.ok) return []; // Silently fail this specific feed if down
             
-            // Jcink RSS sometimes uses Dublin Core <dc:creator> for the author
-            const author = item.getElementsByTagName("dc:creator")[0]?.textContent 
-                        || item.querySelector("author")?.textContent 
-                        || "Forum Member";
+            const text = await response.text();
+            
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const items = xmlDoc.querySelectorAll("item");
 
-            return {
-                id: link, // Use the URL as the unique ID
-                title: title,
-                content: rawContent.replace(/<[^>]*>?/gm, ''), // Strip HTML tags for the snippet
-                author: author,
-                url: link,
-                source: 'Barbermonger' // Unifies the tag system
-            };
-        });
-    } catch (error) {
-        console.error(`Failed to fetch Barbermonger: ${error.message}`);
-        return [];
-    }
+            return Array.from(items).map(item => {
+                const title = item.querySelector("title")?.textContent || "No Title";
+                const link = item.querySelector("link")?.textContent || "";
+                const rawContent = item.querySelector("description")?.textContent || "";
+                
+                const author = item.getElementsByTagName("dc:creator")[0]?.textContent 
+                            || item.querySelector("author")?.textContent 
+                            || "Forum Member";
+
+                return {
+                    id: link, 
+                    title: title,
+                    content: rawContent.replace(/<[^>]*>?/gm, ''), // Strip HTML tags
+                    author: author,
+                    url: link,
+                    source: `BM: Forum ${cleanId}` // Tags it with the specific forum ID
+                };
+            });
+        } catch (error) {
+            console.error(`Failed to fetch Barbermonger ID ${cleanId}: ${error.message}`);
+            return [];
+        }
+    });
+
+    // Wait for all forum requests to finish, then flatten into a single array
+    const results = await Promise.all(fetchPromises);
+    return results.flat();
 };
