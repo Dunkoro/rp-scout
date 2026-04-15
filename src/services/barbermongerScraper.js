@@ -15,13 +15,18 @@ export const scrapeBarbermonger = async (forumIds) => {
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            const links = doc.querySelectorAll('a[href*="showtopic="]'); 
+           // Targeted but permissive: Find any link that looks like a thread
+            const links = doc.querySelectorAll('a'); 
             const results = [];
 
             links.forEach(link => {
+                const href = link.getAttribute('href') || '';
                 const title = link.textContent.trim();
-                if (title && title.length > 5 && !title.includes('Pinned:')) {
-                    const fullUrl = link.href.includes('http') ? link.href : `https://barbermonger.me/${link.getAttribute('href')}`;
+                
+                // Jcink forums use 'showtopic=' for thread links
+                if (href.includes('showtopic=') && title.length > 5 && !title.includes('Pinned:')) {
+                    const fullUrl = href.startsWith('http') ? href : `https://barbermonger.me/${href.replace(/^\//, '')}`;
+                    
                     results.push({
                         id: fullUrl,
                         title: title,
