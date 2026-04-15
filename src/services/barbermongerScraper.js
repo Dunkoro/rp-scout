@@ -6,8 +6,8 @@ export const scrapeBarbermonger = async (forumIds) => {
         const cleanId = id.trim();
         const targetUrl = `https://barbermonger.me/index.php?showforum=${cleanId}`;
         
-        // Using CodeTabs proxy (less likely to be blocked by BM Cloudflare)
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+        // Switching to AllOrigins RAW which is less likely to trigger Cloudflare's "Proxy Detected" page
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
         
         try {
             const response = await fetch(proxyUrl);
@@ -15,20 +15,20 @@ export const scrapeBarbermonger = async (forumIds) => {
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            // Targeted selection for Jcink forum topic titles
+            // Finding the topic links in a Jcink forum
             const topicLinks = doc.querySelectorAll('a[href*="showtopic="]'); 
             const posts = [];
 
             topicLinks.forEach(link => {
                 const title = link.textContent.trim();
-                // Exclude pinned threads and navigation links
-                if (title && !title.includes('Pinned:') && !title.includes('»')) {
-                    const url = link.href.replace(window.location.origin, 'https://barbermonger.me');
+                // Avoid pinned threads or empty links
+                if (title && !title.includes('Pinned:') && title.length > 5) {
+                    const fullUrl = link.href.includes('http') ? link.href : `https://barbermonger.me/${link.getAttribute('href')}`;
                     posts.push({
-                        id: url,
+                        id: fullUrl,
                         title: title,
-                        author: 'Barbermonger User',
-                        url: url,
+                        author: 'BM User',
+                        url: fullUrl,
                         source: `BM:${cleanId}`,
                         content: '',
                         isStub: true 
@@ -37,17 +37,11 @@ export const scrapeBarbermonger = async (forumIds) => {
             });
             return posts;
         } catch (e) {
-            console.error(`[BM] Scrape failed for ID ${cleanId}:`, e);
+            console.warn(`[BM] Scrape failed for forum ${cleanId}`);
             return [];
         }
     });
 
     const results = await Promise.all(fetchPromises);
-    // Remove duplicates and limit to top 15
-    const seen = new Set();
-    return results.flat().filter(p => {
-        const isDuplicate = seen.has(p.url);
-        seen.add(p.url);
-        return !isDuplicate;
-    }).slice(0, 15); 
+    return results.flat().slice(0, 20); 
 };
