@@ -34,6 +34,7 @@
               <span class="tag pairing">{{ post.ai.pairing }}</span>
               <span class="tag platform">{{ post.ai.platform }}</span>
               <span class="tag type">{{ post.ai.type }}</span>
+              
               <span class="tag fandom" :class="{
                 'is-original': post.ai.fandom === 'Original',
                 'is-fandom-oc': post.ai.fandom === 'Fandom (OCs)',
@@ -41,7 +42,7 @@
               }">
                 {{ post.ai.fandom }}
               </span>
-              </span>
+              
               <span v-for="tag in post.ai.tags" :key="tag" class="tag genre">{{ tag }}</span>
             </div>
           </div>
