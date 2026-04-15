@@ -8,69 +8,44 @@ const chunkArray = (array, size) => {
     return chunked;
 };
 
-// Notice the new third parameter: onChunkComplete
 export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => {
-    if (!apiKey) throw new Error("No API key provided.");
-    if (!posts || posts.length === 0) return [];
+    if (!apiKey || !posts.length) return [];
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    // 1.5-flash is the most stable "high capacity" free model
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const CHUNK_SIZE = 3; // Smaller batches are less likely to trigger 503s
+    const CHUNK_SIZE = 3; 
     const chunks = chunkArray(posts, CHUNK_SIZE);
 
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        
         const postSnippets = chunk.map((p, index) => 
-            `ID: ${index}\nTITLE: ${p.title}\nBODY: ${p.content.substring(0, 600)}...`
+            `ID: ${index}\nTITLE: ${p.title}\nBODY: ${p.content.substring(0, 500)}...`
         ).join('\n---\n');
 
-        const prompt = `
-            You are a roleplay advertisement analyzer. Analyze the following ${chunk.length} forum posts.
-            Return a raw JSON array containing exactly ${chunk.length} objects, in the same order as the IDs.
-            Do not include markdown blocks like \`\`\`json.
-            
-            For each post, extract:
-            1. "pairing": Genders/roles sought (e.g., "F4M", "A4A"). If unclear, output "Any".
-            2. "platform": Where they want to play (e.g., "Discord", "Reddit").
-            3. "type": "Looking for a story" or "Has a prompt".
-            4. "tags": An array of 4+ genre tags (e.g., ["Sci-Fi", "Romance", "NSFW", "Political"]).
-            5. "fandom": Output EXACTLY one of these four options: 
-                   "Original" (original world/characters), 
-                   "Fandom (OCs)" (existing world, original characters), 
-                   "Fandom (Canon)" (existing world, canon characters), 
-                   "Celebrity" (real-life public figures/actors/famous people). 
-                   Do not output specific names.
-            6. "summary": A brutal, 1-sentence summary of what the author wants.
-
-            Posts to analyze:
-            ${postSnippets}
-        `;
+        const prompt = `Analyze these ${chunk.length} RP ads. Return a raw JSON array of objects.
+        Fields: "pairing" (F4M, etc), "platform" (Discord, etc), "type" (Story/Prompt), 
+        "tags" (2-4 genres), "summary" (1 sentence), 
+        "fandom" (Original, Fandom (OCs), Fandom (Canon), or Celebrity).
+        
+        Posts:
+        ${postSnippets}`;
 
         try {
-            if (i > 0) await new Promise(resolve => setTimeout(resolve, 6000));
+            // Respectful 5-second delay to avoid 503 errors
+            if (i > 0) await new Promise(r => setTimeout(r, 5000));
             
             const result = await model.generateContent(prompt);
-            const responseText = result.response.text();
-            
-            const cleanJsonString = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-            const aiData = JSON.parse(cleanJsonString);
+            const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+            const aiData = JSON.parse(text);
 
-            const analyzedChunk = chunk.map((post, index) => ({ ...post, ai: aiData[index] || {} }));
-            
-            // FIRE THE DATA TO THE UI IMMEDIATELY
-            if (onChunkComplete) onChunkComplete(analyzedChunk);
+            const analyzed = chunk.map((post, idx) => ({ ...post, ai: aiData[idx] || {} }));
+            if (onChunkComplete) onChunkComplete(analyzed);
 
         } catch (error) {
-            console.error(`Gemini Error on batch ${i + 1}:`, error);
-            const failedChunk = chunk.map(post => ({ 
-                ...post, 
-                ai: { summary: "AI failed to read this post (Server Busy).", tags: [] }
-            }));
-            
-            // IF IT FAILS, STILL FIRE THE RAW POSTS TO THE UI
-            if (onChunkComplete) onChunkComplete(failedChunk);
+            console.error("Gemini Batch Error:", error);
+            if (onChunkComplete) onChunkComplete(chunk.map(p => ({ ...p, ai: { summary: "AI Busy. Try refreshing.", tags: [] }})));
         }
     }
 };
