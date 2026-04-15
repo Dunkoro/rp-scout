@@ -9,7 +9,7 @@
       </div>
 
       <div class="input-group">
-        <label>Global Blacklist (Quick Toggle)</label>
+        <label>Global Blacklist</label>
         <div class="toggle-group">
           <button 
             @click="toggleFilter('Fandom (Canon)')" 
@@ -29,7 +29,7 @@
       <div class="input-group">
         <label>Block Username or Tag</label>
         <div class="flex-row">
-          <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" type="text" placeholder="e.g. u/BadUser or NSFW">
+          <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" type="text" placeholder="e.g. u/BadUser">
           <button class="add-btn" @click="addCustomFilter">+</button>
         </div>
         <div class="mini-tag-list">
@@ -45,7 +45,7 @@
       </div>
       
       <button @click="fetchAndAnalyze" :disabled="isLoading" class="main-action">
-        {{ isLoading ? buttonText : 'Scout Posts' }}
+        {{ isLoading ? buttonText : 'Refresh Feed' }}
       </button>
       
       <p class="status" :class="{ error: isError }">{{ statusMessage }}</p>
@@ -55,7 +55,7 @@
       <div id="results-count">
         {{ filteredPosts.length }} visible / {{ posts.length }} total
         <span v-if="posts.length > filteredPosts.length" class="hidden-count">
-          ({{ posts.length - filteredPosts.length }} filtered out)
+          ({{ posts.length - filteredPosts.length }} filtered)
         </span>
       </div>
       
@@ -69,7 +69,9 @@
               <span class="tag pairing" @click="toggleFilter(post.ai.pairing)">{{ post.ai.pairing }}</span>
               <span class="tag platform" @click="toggleFilter(post.ai.platform)">{{ post.ai.platform }}</span>
               <span class="tag type" @click="toggleFilter(post.ai.type)">{{ post.ai.type }}</span>
-              <span class="tag fandom" :class="post.ai.fandom.replace(/\s+/g, '-').toLowerCase()" @click="toggleFilter(post.ai.fandom)">
+              <span class="tag fandom" 
+                    :class="post.ai.fandom ? post.ai.fandom.replace(/\s+/g, '-').toLowerCase() : ''" 
+                    @click="toggleFilter(post.ai.fandom)">
                 {{ post.ai.fandom }}
               </span>
               <span v-for="tag in post.ai.tags" :key="tag" class="tag genre" @click="toggleFilter(tag)">
@@ -104,21 +106,34 @@ const isError = ref(false);
 const activeFilters = ref([]);
 const newBlacklistTag = ref('');
 
-// PERSISTENCE LOGIC
+// --- PERSISTENCE & AUTO-LOAD ---
 onMounted(() => {
+  // 1. Load saved data
   const savedKey = localStorage.getItem('gemini_api_key');
   if (savedKey) apiKey.value = savedKey;
 
+  const savedSubs = localStorage.getItem('rp_scout_subs');
+  if (savedSubs) subs.value = savedSubs;
+
   const savedFilters = localStorage.getItem('rp_scout_blacklist');
   if (savedFilters) activeFilters.value = JSON.parse(savedFilters);
+
+  // 2. AUTO-EXECUTE if we have an API key
+  if (apiKey.value && subs.value) {
+    fetchAndAnalyze();
+  } else if (!apiKey.value) {
+    statusMessage.value = 'Welcome! Enter your API key to start scouting.';
+  }
 });
 
+// Watchers for saving changes
 watch(apiKey, (val) => localStorage.setItem('gemini_api_key', val));
+watch(subs, (val) => localStorage.setItem('rp_scout_subs', val));
 watch(activeFilters, (val) => {
   localStorage.setItem('rp_scout_blacklist', JSON.stringify(val));
 }, { deep: true });
 
-// Separation for UI: Don't show "Global" buttons in the custom list
+// --- FILTER LOGIC ---
 const customFiltersOnly = computed(() => {
   const globals = ['Fandom (Canon)', 'Fandom (OCs)'];
   return activeFilters.value.filter(f => !globals.includes(f));
@@ -156,21 +171,32 @@ const filteredPosts = computed(() => {
   });
 });
 
+// --- CORE EXECUTION ---
 const fetchAndAnalyze = async () => {
   if (!subs.value || !apiKey.value) return;
+  
   isLoading.value = true;
+  isError.value = false;
   posts.value = [];
+  
   try {
+    buttonText.value = 'Fetching...';
+    statusMessage.value = 'Scouting Reddit...';
+    
     const rawPosts = await fetchPostsFromSubreddits(subs.value);
+    
+    buttonText.value = 'AI Reading...';
     await analyzePostsWithGemini(rawPosts, apiKey.value, (chunk) => {
       posts.value = [...posts.value, ...chunk];
     });
-    statusMessage.value = 'Done!';
+    
+    statusMessage.value = 'All posts analyzed.';
   } catch (e) {
     statusMessage.value = e.message;
     isError.value = true;
   } finally {
     isLoading.value = false;
+    buttonText.value = ''; // Reset for the button label logic
   }
 };
 </script>
