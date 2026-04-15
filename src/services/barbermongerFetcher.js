@@ -1,53 +1,40 @@
-const rssParser = require('rss-parser');
+export const fetchBarbermongerPosts = async (rssUrl) => {
+    if (!rssUrl) return [];
+    
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`;
+    
+    try {
+        const response = await fetch(proxyUrl);
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        
+        const text = await response.text();
+        
+        // Browser-native XML parsing
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(text, "text/xml");
+        const items = xmlDoc.querySelectorAll("item");
 
-class BarbermongerFetcher {
-  constructor() {
-    this.feeds = [];
-    this.parser = new rssParser();
-  }
+        return Array.from(items).map(item => {
+            const title = item.querySelector("title")?.textContent || "No Title";
+            const link = item.querySelector("link")?.textContent || "";
+            const rawContent = item.querySelector("description")?.textContent || "";
+            
+            // Jcink RSS sometimes uses Dublin Core <dc:creator> for the author
+            const author = item.getElementsByTagName("dc:creator")[0]?.textContent 
+                        || item.querySelector("author")?.textContent 
+                        || "Forum Member";
 
-  // Fetch and parse a single RSS feed
-  async fetchFeed(url) {
-    const feed = await this.parser.parseURL(url);
-    return this.parseFeedData(feed);
-  }
-
-  // Fetch and parse multiple RSS feeds
-  async fetchMultipleFeeds(urls) {
-    const feedPromises = urls.map(url => this.fetchFeed(url));
-    return Promise.all(feedPromises);
-  }
-
-  // Add a new RSS feed
-  addFeed(url) {
-    if (!this.feeds.includes(url)) {
-      this.feeds.push(url);
+            return {
+                id: link, // Use the URL as the unique ID
+                title: title,
+                content: rawContent.replace(/<[^>]*>?/gm, ''), // Strip HTML tags for the snippet
+                author: author,
+                url: link,
+                source: 'Barbermonger' // Unifies the tag system
+            };
+        });
+    } catch (error) {
+        console.error(`Failed to fetch Barbermonger: ${error.message}`);
+        return [];
     }
-  }
-
-  // Remove an RSS feed
-  removeFeed(url) {
-    this.feeds = this.feeds.filter(feed => feed !== url);
-  }
-
-  // Get all configured feeds
-  getAllFeeds() {
-    return this.feeds;
-  }
-
-  // Parse feed data to extract required information
-  parseFeedData(feed) {
-    return feed.items.map(item => ({
-      title: item.title,
-      content: item.content,
-      author: item.author,
-      date: item.pubDate,
-      url: item.link,
-      source: feed.title,
-      category: item.categories,
-      tags: item.tags,
-    }));
-  }
-}
-
-module.exports = BarbermongerFetcher;
+};
