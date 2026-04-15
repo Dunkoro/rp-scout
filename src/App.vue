@@ -45,25 +45,23 @@ import { fetchPostsFromSubreddits } from './services/redditFetcher.js';
 import { fetchBarbermongerPosts } from './services/barbermongerFetcher.js';
 
 const subs = ref('RoleplayPartnerSearch+Roleplay');
-const bmFeed = ref('https://barbermonger.me/index.php?act=rssout&id=2');
+const bmForums = ref('1+45'); // <-- Updated default state
 const posts = ref([]);
 const isLoading = ref(false);
 const statusMessage = ref('');
 
 const fetchPosts = async () => {
-  if (!subs.value && !bmFeed.value) return;
+  if (!subs.value && !bmForums.value) return;
   
   isLoading.value = true;
   statusMessage.value = 'Fetching data...';
   
   try {
-    // Fetch both sources concurrently
     const [redditData, bmData] = await Promise.all([
       subs.value ? fetchPostsFromSubreddits(subs.value) : Promise.resolve([]),
-      bmFeed.value ? fetchBarbermongerPosts(bmFeed.value) : Promise.resolve([])
+      bmForums.value ? fetchBarbermongerPosts(bmForums.value) : Promise.resolve([]) // <-- Updated variable here
     ]);
 
-    // Merge arrays
     posts.value = [...redditData, ...bmData];
     statusMessage.value = 'Done!';
   } catch (error) {
