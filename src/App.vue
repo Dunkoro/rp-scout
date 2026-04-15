@@ -204,67 +204,209 @@ const scanSinglePost = async (post) => {
 </script>
 
 <style>
+/* 1. CORE THEME & RESET */
 :root { 
-  --bg: #0f0f0f; --card: #1a1a1a; --accent: #3d8bff; 
-  --text: #ffffff; --text-dim: #a0a0a0; --danger: #ff4d4d; 
+  --bg: #0d0d0d; 
+  --sidebar-bg: #161616;
+  --card-bg: #1e1e1e;
+  --input-bg: #252525;
+  --accent: #007bff; 
+  --text: #ffffff; 
+  --text-dim: #999; 
+  --danger: #ff4444; 
 }
-body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; overflow: hidden; }
 
-#app-container { display: flex; height: 100vh; position: relative; }
-
-/* Mobile Header */
-#mobile-header { 
-  display: none; height: 60px; background: #1a1a1a; width: 100%; position: fixed; top: 0; z-index: 100;
-  align-items: center; justify-content: space-between; padding: 0 15px; box-sizing: border-box; border-bottom: 1px solid #333;
+body { 
+  background: var(--bg); 
+  color: var(--text); 
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  margin: 0; 
+  overflow: hidden; /* Prevents double scrollbars */
 }
-#mobile-header h1 { font-size: 1.2rem; margin: 0; }
-.menu-toggle, .refresh-mini { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; }
 
-/* Sidebar */
+/* 2. LAYOUT ENGINE */
+#app-container { 
+  display: flex; 
+  height: 100vh; 
+  width: 100vw;
+}
+
+/* 3. THE SIDEBAR (Desktop) */
 #sidebar { 
-  width: 320px; background: #151515; border-right: 1px solid #333; height: 100vh; overflow-y: auto; 
-  transition: transform 0.3s ease; z-index: 200;
+  width: 320px; 
+  min-width: 320px;
+  background: var(--sidebar-bg); 
+  border-right: 1px solid #2a2a2a; 
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.sidebar-content { padding: 25px; }
 
-/* Main Feed */
-#feed { flex-grow: 1; height: 100vh; overflow-y: auto; background: #121212; padding: 20px; padding-top: 20px; box-sizing: border-box; }
+.sidebar-content { 
+  padding: 24px; 
+  overflow-y: auto; 
+}
 
-/* Cards */
+#sidebar h2 {
+  font-size: 1.4rem;
+  margin-top: 0;
+  margin-bottom: 24px;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+}
+
+/* 4. INPUT GROUPS & FORM FIELDS */
+.input-group { 
+  margin-bottom: 20px; 
+}
+
+label { 
+  display: block;
+  font-size: 0.7rem; 
+  font-weight: 700; 
+  color: var(--text-dim); 
+  text-transform: uppercase; 
+  margin-bottom: 8px; 
+  letter-spacing: 0.5px;
+}
+
+input { 
+  width: 100%; 
+  padding: 12px; 
+  background: var(--input-bg); 
+  border: 1px solid #333; 
+  color: white; 
+  border-radius: 8px; 
+  box-sizing: border-box; 
+  font-size: 0.9rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+}
+
+/* Unified Blacklist Input */
+.flex-row { display: flex; gap: 8px; }
+.add-btn { 
+  background: #333; 
+  color: white; 
+  border: none; 
+  padding: 0 16px; 
+  border-radius: 8px; 
+  cursor: pointer; 
+  font-weight: bold;
+}
+.add-btn:hover { background: #444; }
+
+/* 5. BLACKLIST TAGS (Sidebar) */
+.mini-tag-list { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 6px; 
+  margin-top: 12px; 
+}
+
+.mini-tag { 
+  font-size: 0.7rem; 
+  background: rgba(255, 68, 68, 0.1); 
+  padding: 5px 10px; 
+  border-radius: 6px; 
+  border: 1px solid rgba(255, 68, 68, 0.3); 
+  cursor: pointer; 
+  color: var(--danger); 
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-tag:hover { 
+  background: var(--danger); 
+  color: white; 
+}
+
+/* 6. MAIN FEED & CARDS */
+#feed { 
+  flex-grow: 1; 
+  padding: 30px; 
+  overflow-y: auto; 
+  background: var(--bg);
+}
+
+.feed-header {
+  margin-bottom: 24px;
+}
+
+#results-count { 
+  font-size: 0.9rem; 
+  color: var(--text-dim); 
+}
+
 .rp-card { 
-  background: var(--card); border-radius: 12px; padding: 18px; margin-bottom: 15px; 
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #2a2a2a; transition: transform 0.2s;
+  background: var(--card-bg); 
+  border-radius: 12px; 
+  padding: 24px; 
+  margin-bottom: 20px; 
+  border: 1px solid #2a2a2a;
+  transition: transform 0.2s ease;
 }
-.card-header { display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: bold; }
+
+.card-header { 
+  display: flex; 
+  justify-content: space-between; 
+  font-size: 0.7rem; 
+  margin-bottom: 12px; 
+  color: var(--text-dim); 
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
 .card-author { color: var(--accent); cursor: pointer; }
-.rp-card h3 { margin: 0 0 12px 0; font-size: 1.1rem; line-height: 1.4; }
-.rp-card h3 a { color: white; text-decoration: none; }
 
-/* AI Content */
-.ai-box { background: #222; border-radius: 8px; padding: 12px; border-left: 3px solid var(--accent); }
-.ai-summary { font-size: 0.9rem; color: #ddd; margin: 0 0 10px 0; line-height: 1.5; }
+/* 7. ACTION BUTTONS */
+.main-action { 
+  width: 100%; 
+  padding: 14px; 
+  background: var(--accent); 
+  color: white; 
+  border: none; 
+  border-radius: 8px; 
+  font-weight: bold; 
+  cursor: pointer; 
+  font-size: 1rem;
+  margin-top: 10px;
+}
 
-/* Tags */
-.tag-container { display: flex; gap: 6px; flex-wrap: wrap; }
-.tag { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; cursor: pointer; background: #333; }
-.tag.fandom.original { background: #444; }
-.tag.fandom.fandom-canon { background: var(--danger); }
-.tag.fandom.is-celebrity { background: #8e24aa; }
+.status { font-size: 0.8rem; margin-top: 15px; color: var(--text-dim); }
+.status.error { color: var(--danger); }
 
-/* Buttons */
-.main-action { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-.scan-btn { background: #444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 0.8rem; }
-
-/* Responsive Mobile Layout */
+/* 8. MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
-  #mobile-header { display: flex; }
-  #sidebar { position: fixed; left: 0; transform: translateX(-100%); width: 280px; }
+  #mobile-header { 
+    display: flex; height: 60px; background: var(--sidebar-bg); width: 100%; 
+    position: fixed; top: 0; z-index: 1100; align-items: center; 
+    justify-content: space-between; padding: 0 20px; box-sizing: border-box; 
+    border-bottom: 1px solid #2a2a2a;
+  }
+  
+  #sidebar { 
+    position: fixed; 
+    left: 0; 
+    transform: translateX(-100%); 
+    height: 100%; 
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+  }
+  
   #app-container.sidebar-open #sidebar { transform: translateX(0); }
-  #feed { padding-top: 80px; }
+  #feed { padding: 80px 15px 20px 15px; }
   .desktop-only { display: none; }
 }
 
 /* Animations */
-.list-enter-active, .list-leave-active { transition: all 0.4s ease; }
-.list-enter-from, .list-leave-to { opacity: 0; transform: translateY(30px); }
+.list-enter-active, .list-leave-active { transition: all 0.3s ease; }
+.list-enter-from, .list-leave-to { opacity: 0; transform: translateX(-10px); }
 </style>
