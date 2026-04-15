@@ -109,9 +109,7 @@ const isSidebarOpen = ref(false);
 const statusMessage = ref('');
 const buttonText = ref('');
 const isError = ref(false);
-
-// Ensure this is initialized as an empty array to prevent .length errors
-const activeFilters = ref([]);
+const activeFilters = ref([]); // Always initialized to empty array
 const newBlacklistTag = ref('');
 
 onMounted(() => {
@@ -120,10 +118,9 @@ onMounted(() => {
   bmIds.value = localStorage.getItem('rp_scout_bm') || '1+45';
   
   const savedFilters = localStorage.getItem('rp_scout_blacklist');
-  try {
-    if (savedFilters) activeFilters.value = JSON.parse(savedFilters);
-  } catch (e) {
-    activeFilters.value = [];
+  if (savedFilters) {
+    try { activeFilters.value = JSON.parse(savedFilters); }
+    catch { activeFilters.value = []; }
   }
 
   if (apiKey.value) fetchAndAnalyze();
@@ -136,71 +133,61 @@ watch([apiKey, subs, bmIds, activeFilters], () => {
   localStorage.setItem('rp_scout_blacklist', JSON.stringify(activeFilters.value || []));
 }, { deep: true });
 
-const toggleFilter = (tag) => {
-  if (!tag) return;
-  const index = activeFilters.value.indexOf(tag);
-  if (index === -1) activeFilters.value.push(tag);
-  else activeFilters.value.splice(index, 1);
-};
-
-const addCustomFilter = () => {
-  if (newBlacklistTag.value && newBlacklistTag.value.trim()) {
-    toggleFilter(newBlacklistTag.value.trim());
-    newBlacklistTag.value = '';
-  }
-};
-
+// AGGRESSIVE FILTER LOGIC
 const isBlacklisted = (post) => {
-  // Defensive: check if filters exist
   const filters = activeFilters.value || [];
   if (filters.length === 0 || !post) return false;
   
-  const searchableText = [
+  // Create a single searchable string of everything inside the post
+  const contentToSearch = [
     post.author,
     post.title,
     post.source,
     ...(post.ai ? [post.ai.pairing, post.ai.platform, post.ai.fandom, ...(post.ai.tags || [])] : [])
-  ].filter(Boolean).map(t => String(t).toLowerCase());
+  ].join(' ').toLowerCase();
 
   return filters.some(f => {
-    const filterTerm = String(f || '').toLowerCase().trim();
-    return filterTerm && searchableText.some(text => text.includes(filterTerm));
+    const term = String(f).toLowerCase().trim();
+    return term && contentToSearch.includes(term);
   });
 };
 
 const filteredPosts = computed(() => {
-  const allPosts = posts.value || [];
-  return allPosts.filter(post => !isBlacklisted(post));
+  const currentPosts = posts.value || [];
+  return currentPosts.filter(post => !isBlacklisted(post));
 });
 
 const fetchAndAnalyze = async () => {
   if (!apiKey.value) return;
   isLoading.value = true;
   isError.value = false;
-  posts.value = []; 
+  posts.value = [];
   
   try {
-    buttonText.value = 'Fetching...';
-    // Use a failsafe for the fetches
-    const redditData = await fetchPostsFromSubreddits(subs.value).catch(() => []);
-    const bmData = await scrapeBarbermonger(bmIds.value).catch(() => []);
+    buttonText.value = 'Connecting...';
+    const [redditRaw, bmRaw] = await Promise.all([
+      fetchPostsFromSubreddits(subs.value).catch(() => []),
+      scrapeBarbermonger(bmIds.value).catch(() => [])
+    ]);
     
-    const preFiltered = [...redditData, ...bmData].filter(post => !isBlacklisted(post));
+    // PRE-FILTER: Discard posts with blacklisted titles/authors immediately
+    const cleanRaw = [...redditRaw, ...bmRaw].filter(post => !isBlacklisted(post));
     
-    const toAnalyze = preFiltered.filter(p => !p.isStub);
-    const stubs = preFiltered.filter(p => p.isStub);
+    const toAnalyze = cleanRaw.filter(p => !p.isStub);
+    const stubs = cleanRaw.filter(p => p.isStub);
     
-    posts.value = stubs; 
+    posts.value = stubs; // Show BM threads instantly
 
-    buttonText.value = 'AI Analysis...';
+    buttonText.value = 'AI Reading...';
     await analyzePostsWithGemini(toAnalyze, apiKey.value, (chunk) => {
+      // POST-AI FILTER: Catch posts once Gemini discovers new tags
       const safeChunk = (chunk || []).filter(post => !isBlacklisted(post));
       posts.value = [...posts.value, ...safeChunk];
     });
 
-    statusMessage.value = 'Feed refreshed.';
+    statusMessage.value = 'Update Complete';
   } catch (e) {
-    statusMessage.value = "Connection error.";
+    statusMessage.value = "Connection Error";
     isError.value = true;
   } finally {
     isLoading.value = false;
