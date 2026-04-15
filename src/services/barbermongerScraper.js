@@ -5,16 +5,19 @@ export const scrapeBarbermonger = async (forumIds) => {
     const fetchPromises = ids.map(async (id) => {
         const cleanId = id.trim();
         const targetUrl = `https://barbermonger.me/index.php?showforum=${cleanId}`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+        
+        // Switching to a different proxy provider
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
         
         try {
             const response = await fetch(proxyUrl);
-            const json = await response.json();
+            if (!response.ok) throw new Error(`Proxy returned ${response.status}`);
+            
+            const html = await response.text();
             const parser = new DOMParser();
-            const doc = parser.parseFromString(json.contents, 'text/html');
+            const doc = parser.parseFromString(html, 'text/html');
 
-            // Jcink Topic Rows usually sit in rows with class 'topic-row' or similar
-            // This targets the specific link structure of Barbermonger
+            // Targeted selection for Barbermonger's thread rows
             const rows = doc.querySelectorAll('tr'); 
             const posts = [];
 
@@ -22,25 +25,31 @@ export const scrapeBarbermonger = async (forumIds) => {
                 const link = row.querySelector('a[href*="showtopic="]');
                 const author = row.querySelector('span.desc a') || row.querySelector('td:nth-child(3)');
                 
-                if (link && !link.textContent.includes('Pinned:')) {
-                    posts.push({
-                        id: link.href,
-                        title: link.textContent.trim(),
-                        author: author ? author.textContent.trim() : 'Unknown',
-                        url: link.href,
-                        source: `BM: ${cleanId}`,
-                        content: '', // Empty initially to save bandwidth
-                        isStub: true // Flag to show "Scan with AI" button
-                    });
+                if (link && !link.textContent.includes('Pinned:') && link.textContent.trim().length > 0) {
+                    // Check if it's a real thread and not a subforum link
+                    const href = link.href;
+                    if (href.includes('showtopic=')) {
+                        posts.push({
+                            id: href,
+                            title: link.textContent.trim(),
+                            author: author ? author.textContent.trim() : 'Guest',
+                            url: href,
+                            source: `BM:${cleanId}`,
+                            content: '',
+                            isStub: true 
+                        });
+                    }
                 }
             });
             return posts;
         } catch (e) {
-            console.error("BM Scrape Error:", e);
+            console.error(`[BM] Scrape failed for ID ${cleanId}:`, e.message);
             return [];
         }
     });
 
     const results = await Promise.all(fetchPromises);
-    return results.flat().slice(0, 20); // Keep it to top 20
+    // Flatten and remove duplicates by URL
+    const uniquePosts = Array.from(new Map(results.flat().map(p => [p.url, p])).values());
+    return uniquePosts.slice(0, 15); 
 };
