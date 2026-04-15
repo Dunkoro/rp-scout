@@ -6,45 +6,39 @@ export const scrapeBarbermonger = async (forumIds) => {
         const cleanId = id.trim();
         const targetUrl = `https://barbermonger.me/index.php?showforum=${cleanId}`;
         
-        // CodeTabs is currently the most reliable "stealth" proxy for Cloudflare
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+        // thingproxy is often slower but better at bypassing Jcink firewall stubs
+        const proxyUrl = `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(targetUrl)}`;
         
         try {
             const response = await fetch(proxyUrl);
             const html = await response.text();
-            console.log("[BM Debug] HTML Length:", html.length);
-            if (html.includes("cloudflare") || html.includes("Ray ID")) {
-                console.error("[BM Debug] Blocked by Cloudflare challenge.");
+            
+            console.log(`[BM Debug] ID ${cleanId} HTML Length:`, html.length);
+            
+            // If length is still under 500, we are still blocked
+            if (html.length < 500) {
+                console.error(`[BM Debug] ID ${cleanId} is returning a stub. Proxy is blocked.`);
+                return [];
             }
+
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-
-           // Targeted but permissive: Find any link that looks like a thread
-            const links = doc.querySelectorAll('a'); 
+            const links = doc.querySelectorAll('a[href*="showtopic="]'); 
             const results = [];
 
             links.forEach(link => {
-                const href = link.getAttribute('href') || '';
                 const title = link.textContent.trim();
-                
-                // Jcink forums use 'showtopic=' for thread links
-                if (href.includes('showtopic=') && title.length > 5 && !title.includes('Pinned:')) {
-                    const fullUrl = href.startsWith('http') ? href : `https://barbermonger.me/${href.replace(/^\//, '')}`;
-                    
+                if (title && title.length > 5 && !title.includes('Pinned:')) {
+                    const rawHref = link.getAttribute('href');
+                    const fullUrl = rawHref.startsWith('http') ? rawHref : `https://barbermonger.me/${rawHref.replace(/^\//, '')}`;
                     results.push({
-                        id: fullUrl,
-                        title: title,
-                        author: 'BM User',
-                        url: fullUrl,
-                        source: `BM:${cleanId}`,
-                        content: '',
-                        isStub: true 
+                        id: fullUrl, title: title, author: 'BM User', url: fullUrl,
+                        source: `BM:${cleanId}`, content: '', isStub: true 
                     });
                 }
             });
             return results;
         } catch (e) {
-            console.warn(`[BM] Scrape failed for forum ${cleanId}`);
             return [];
         }
     });
