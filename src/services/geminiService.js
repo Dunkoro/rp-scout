@@ -4,10 +4,10 @@ export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => 
     if (!apiKey || !posts?.length) return [];
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-        apiVersion: 'v1' // This prevents the SDK from defaulting to v1beta
-    });
+    const model = genAI.getGenerativeModel(
+        { model: "gemini-1.5-flash" }, 
+        { apiVersion: "v1" } 
+    );    
 
     const CHUNK_SIZE = 4;
     for (let i = 0; i < posts.length; i += CHUNK_SIZE) {
