@@ -20,7 +20,7 @@ export const fetchPostsFromSubreddits = async (subreddits) => {
                 content: post.selftext,
                 author: post.author,
                 url: post.url,
-                subreddit: post.subreddit
+                source: 'r/' + post.subreddit
             };
         });
     } catch (error) {
