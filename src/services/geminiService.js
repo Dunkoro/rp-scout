@@ -1,28 +1,23 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const chunkArray = (array, size) => {
-    const chunked = [];
-    for (let i = 0; i < array.length; i += size) {
-        chunked.push(array.slice(i, i + size));
-    }
-    return chunked;
-};
-
 export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => {
-    if (!apiKey || !posts.length) return [];
+    if (!apiKey || !posts || posts.length === 0) return [];
 
+    // Initialize without the 'v1beta' flag to use the stable production endpoint
     const genAI = new GoogleGenerativeAI(apiKey);
-    // 1.5-flash has much higher quotas for free keys than 2.5
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // Processing 5 at a time to stay well under the daily request limit
-    const CHUNK_SIZE = 5; 
-    const chunks = chunkArray(posts, CHUNK_SIZE);
+    const CHUNK_SIZE = 4; 
+    const chunks = [];
+    for (let i = 0; i < posts.length; i += CHUNK_SIZE) {
+        chunks.push(posts.slice(i, i + CHUNK_SIZE));
+    }
 
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
+        
         const postSnippets = chunk.map((p, index) => 
-            `ID: ${index}\nTITLE: ${p.title}\nBODY: ${p.content.substring(0, 500)}...`
+            `ID: ${index}\nTITLE: ${p.title}\nBODY: ${p.content?.substring(0, 500) || ''}`
         ).join('\n---\n');
 
         const prompt = `Analyze these ${chunk.length} RP ads. 
@@ -31,11 +26,11 @@ export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => 
         ${postSnippets}`;
 
         try {
-            // Keep a 4-second delay just to be safe with the minute-rate-limit
-            if (i > 0) await new Promise(r => setTimeout(r, 4000));
+            if (i > 0) await new Promise(r => setTimeout(r, 5000));
             
             const result = await model.generateContent(prompt);
-            const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+            const response = await result.response;
+            const text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
             const aiData = JSON.parse(text);
 
             const analyzed = chunk.map((post, idx) => ({ ...post, ai: aiData[idx] || {} }));
@@ -43,10 +38,8 @@ export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => 
 
         } catch (error) {
             console.error("Gemini Error:", error);
-            // If we hit a 429, wait 10 seconds and try to continue the loop
-            if (error.message.includes('429')) {
-                await new Promise(r => setTimeout(r, 10000));
-            }
+            // Return stubs so the UI doesn't hang
+            if (onChunkComplete) onChunkComplete(chunk.map(p => ({ ...p, ai: { summary: "Server busy. Try again later." }})));
         }
     }
 };
