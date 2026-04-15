@@ -12,6 +12,10 @@ export const scrapeBarbermonger = async (forumIds) => {
         try {
             const response = await fetch(proxyUrl);
             const html = await response.text();
+            console.log("[BM Debug] HTML Length:", html.length);
+            if (html.includes("cloudflare") || html.includes("Ray ID")) {
+                console.error("[BM Debug] Blocked by Cloudflare challenge.");
+            }
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
