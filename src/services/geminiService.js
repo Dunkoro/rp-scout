@@ -35,8 +35,9 @@ export const analyzePostsWithGemini = async (posts, apiKey, onChunkComplete) => 
             1. "pairing": Genders/roles sought (e.g., "F4M", "A4A"). If unclear, output "Any".
             2. "platform": Where they want to play (e.g., "Discord", "Reddit").
             3. "type": "Looking for a story" or "Has a prompt".
-            4. "tags": An array of 2-4 genre tags (e.g., ["Sci-Fi", "Romance"]).
-            5. "summary": A brutal, 1-sentence summary of what the author wants.
+            4. "tags": An array of 4+ genre tags (e.g., ["Sci-Fi", "Romance", "NSFW", "Political"]).
+            5. "fandom": Output EXACTLY one of these three options: "Original" (totally original world and characters), "Fandom (OCs)" (set in an existing franchise world, but playing Original Characters), or "Fandom (Canon)" (playing as established franchise characters). Do not output specific franchise names.
+            6. "summary": A brutal, 1-sentence summary of what the author wants.
 
             Posts to analyze:
             ${postSnippets}
