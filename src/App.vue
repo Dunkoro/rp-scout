@@ -142,53 +142,71 @@ const addCustomFilter = () => {
   }
 };
 
-// Unified display filter
-const filteredPosts = computed(() => {
-  return posts.value.filter(post => {
-    const postData = [post.author, post.source, post.title, ...(post.ai ? [post.ai.pairing, post.ai.platform, post.ai.type, post.ai.fandom, ...(post.ai.tags || [])] : [])];
-    return !activeFilters.value.some(f => postData.some(pd => pd?.toLowerCase().includes(f.toLowerCase())));
+const getNativeTags = (title) => {
+  const bracketTags = title.match(/\[(.*?)\]/g) || [];
+  const parenTags = title.match(/\((.*?)\)/g) || [];
+  return [...bracketTags, ...parenTags].map(t => t.replace(/[\[\]\(\)]/g, '').trim());
+};
+
+const isBlacklisted = (post) => {
+  if (!activeFilters.value.length) return false;
+  
+  const nativeTags = getNativeTags(post.title);
+  
+  const searchableText = [
+    post.author,
+    post.title,
+    post.source,
+    ...nativeTags, // Include extracted title tags
+    ...(post.ai ? [
+      post.ai.pairing,
+      post.ai.platform,
+      post.ai.fandom,
+      ...(post.ai.tags || [])
+    ] : [])
+  ].map(t => String(t || '').toLowerCase());
+
+  return activeFilters.value.some(filter => {
+    const f = filter.toLowerCase().trim();
+    return searchableText.some(text => text.includes(f));
   });
-});
+};
 
 const fetchAndAnalyze = async () => {
   if (!apiKey.value) return;
   isLoading.value = true;
-  isError.value = false;
   posts.value = [];
   
   try {
-    buttonText.value = 'Fetching...';
     const [redditRaw, bmRaw] = await Promise.all([
       fetchPostsFromSubreddits(subs.value),
       scrapeBarbermonger(bmIds.value)
     ]);
     
-    const allRaw = [...redditRaw, ...bmRaw];
+    // Enrich posts with native tags before filtering
+    const enriched = [...redditRaw, ...bmRaw].map(p => ({
+        ...p,
+        nativeTags: getNativeTags(p.title)
+    }));
 
-    // --- NEW PRE-FILTER STEP ---
-    // Instantly drop any post where the Author or Title matches the blacklist
-    const cleanRaw = allRaw.filter(post => {
-      const basicData = [post.author, post.title];
-      return !activeFilters.value.some(f => basicData.some(bd => bd?.toLowerCase().includes(f.toLowerCase())));
-    });
-
+    // Pre-Filter Step
+    const cleanRaw = enriched.filter(post => !isBlacklisted(post));
+    
     const toAnalyze = cleanRaw.filter(p => !p.isStub);
     const stubs = cleanRaw.filter(p => p.isStub);
     
     posts.value = stubs; 
 
-    buttonText.value = 'AI Reading...';
     await analyzePostsWithGemini(toAnalyze, apiKey.value, (chunk) => {
-      posts.value = [...posts.value, ...chunk];
+      const finalChunk = chunk.filter(post => !isBlacklisted(post));
+      posts.value = [...posts.value, ...finalChunk];
     });
 
-    statusMessage.value = 'Feed updated.';
+    statusMessage.value = 'Updated.';
   } catch (e) {
     statusMessage.value = "Error: " + e.message;
-    isError.value = true;
   } finally {
     isLoading.value = false;
-    buttonText.value = '';
   }
 };
 
@@ -272,19 +290,43 @@ input {
 .post-title { margin-bottom: 16px; font-size: 1.25rem; }
 .post-title a { color: white; text-decoration: none; }
 .post-title a:hover { color: var(--accent); }
-
-/* AI BOX & TAGS */
-.ai-summary-box {
-  background: #121214; padding: 16px; border-radius: 12px; border-left: 4px solid var(--accent);
+/* Fix the 1990s blue links */
+.post-title a {
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color 0.2s;
 }
-.summary-text { margin-bottom: 15px; font-size: 0.95rem; line-height: 1.6; color: #d1d5db; }
 
-.ai-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.post-title a:hover {
+  color: var(--accent);
+}
+
+/* Fix the smashed tags */
+.ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px; /* Adds space between tags */
+  margin-top: 12px;
+}
+
 .ai-tag {
-  background: #27272a; padding: 5px 12px; border-radius: 6px;
-  font-size: 0.75rem; font-weight: 700; cursor: pointer; color: #eee;
+  background: #2a2a2e;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  border: 1px solid #3f3f46;
 }
-.ai-tag:hover { background: #3f3f46; }
+
+/* Make the "Server Busy" box less intrusive */
+.ai-summary-box {
+  background: rgba(18, 18, 20, 0.5);
+  padding: 16px;
+  border-radius: 12px;
+  border-left: 4px solid var(--accent);
+  min-height: 50px;
+}
 
 /* Fandom Colors */
 .ai-tag.fandom.fandom-canon { background: var(--danger); color: white; }
