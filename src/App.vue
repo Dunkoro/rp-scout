@@ -150,26 +150,21 @@ const addCustomFilter = () => {
   }
 };
 
-// CRITICAL: Defensive filtering
 const isBlacklisted = (post) => {
+  // Defensive: check if filters exist
   const filters = activeFilters.value || [];
-  if (filters.length === 0) return false;
+  if (filters.length === 0 || !post) return false;
   
   const searchableText = [
-    post?.author,
-    post?.title,
-    post?.source,
-    ...(post?.ai ? [
-      post.ai.pairing,
-      post.ai.platform,
-      post.ai.fandom,
-      ...(post.ai.tags || [])
-    ] : [])
+    post.author,
+    post.title,
+    post.source,
+    ...(post.ai ? [post.ai.pairing, post.ai.platform, post.ai.fandom, ...(post.ai.tags || [])] : [])
   ].filter(Boolean).map(t => String(t).toLowerCase());
 
-  return filters.some(filter => {
-    const f = filter.toLowerCase().trim();
-    return searchableText.some(text => text.includes(f));
+  return filters.some(f => {
+    const filterTerm = String(f || '').toLowerCase().trim();
+    return filterTerm && searchableText.some(text => text.includes(filterTerm));
   });
 };
 
