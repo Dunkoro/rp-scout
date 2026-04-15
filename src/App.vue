@@ -109,6 +109,8 @@ const isSidebarOpen = ref(false);
 const statusMessage = ref('');
 const buttonText = ref('');
 const isError = ref(false);
+
+// Ensure this is initialized as an empty array to prevent .length errors
 const activeFilters = ref([]);
 const newBlacklistTag = ref('');
 
@@ -116,8 +118,14 @@ onMounted(() => {
   apiKey.value = localStorage.getItem('gemini_api_key') || '';
   subs.value = localStorage.getItem('rp_scout_subs') || 'RoleplayPartnerSearch+Roleplay';
   bmIds.value = localStorage.getItem('rp_scout_bm') || '1+45';
+  
   const savedFilters = localStorage.getItem('rp_scout_blacklist');
-  if (savedFilters) activeFilters.value = JSON.parse(savedFilters);
+  try {
+    if (savedFilters) activeFilters.value = JSON.parse(savedFilters);
+  } catch (e) {
+    activeFilters.value = [];
+  }
+
   if (apiKey.value) fetchAndAnalyze();
 });
 
@@ -125,7 +133,7 @@ watch([apiKey, subs, bmIds, activeFilters], () => {
   localStorage.setItem('gemini_api_key', apiKey.value);
   localStorage.setItem('rp_scout_subs', subs.value);
   localStorage.setItem('rp_scout_bm', bmIds.value);
-  localStorage.setItem('rp_scout_blacklist', JSON.stringify(activeFilters.value));
+  localStorage.setItem('rp_scout_blacklist', JSON.stringify(activeFilters.value || []));
 }, { deep: true });
 
 const toggleFilter = (tag) => {
@@ -136,23 +144,17 @@ const toggleFilter = (tag) => {
 };
 
 const addCustomFilter = () => {
-  if (newBlacklistTag.value.trim()) {
+  if (newBlacklistTag.value && newBlacklistTag.value.trim()) {
     toggleFilter(newBlacklistTag.value.trim());
     newBlacklistTag.value = '';
   }
 };
 
-const getNativeTags = (title) => {
-  const bracketTags = title.match(/\[(.*?)\]/g) || [];
-  const parenTags = title.match(/\((.*?)\)/g) || [];
-  return [...bracketTags, ...parenTags].map(t => t.replace(/[\[\]\(\)]/g, '').trim());
-};
-
-// A "Loose" filter that checks titles, users, and tags
+// CRITICAL: Defensive filtering
 const isBlacklisted = (post) => {
-  if (!activeFilters.value || activeFilters.value.length === 0) return false;
+  const filters = activeFilters.value || [];
+  if (filters.length === 0) return false;
   
-  // Build a "Wall of Text" to search through
   const searchableText = [
     post?.author,
     post?.title,
@@ -163,75 +165,51 @@ const isBlacklisted = (post) => {
       post.ai.fandom,
       ...(post.ai.tags || [])
     ] : [])
-  ].map(t => String(t || '').toLowerCase());
+  ].filter(Boolean).map(t => String(t).toLowerCase());
 
-  return activeFilters.value.some(filter => {
-    if (!filter) return false;
+  return filters.some(filter => {
     const f = filter.toLowerCase().trim();
     return searchableText.some(text => text.includes(f));
   });
 };
 
-// Defensive Computed Property
 const filteredPosts = computed(() => {
-  const currentPosts = posts.value || [];
-  if (activeFilters.value?.length === 0) return currentPosts;
-  return currentPosts.filter(post => !isBlacklisted(post));
+  const allPosts = posts.value || [];
+  return allPosts.filter(post => !isBlacklisted(post));
 });
 
 const fetchAndAnalyze = async () => {
   if (!apiKey.value) return;
   isLoading.value = true;
   isError.value = false;
-  posts.value = []; // Clear current feed
+  posts.value = []; 
   
   try {
-    const [redditRaw, bmRaw] = await Promise.all([
-      fetchPostsFromSubreddits(subs.value).catch(() => []),
-      scrapeBarbermonger(bmIds.value).catch(() => [])
-    ]);
+    buttonText.value = 'Fetching...';
+    // Use a failsafe for the fetches
+    const redditData = await fetchPostsFromSubreddits(subs.value).catch(() => []);
+    const bmData = await scrapeBarbermonger(bmIds.value).catch(() => []);
     
-    // PRE-FILTER: Instantly drop forbidden titles/users
-    const allPosts = [...(redditRaw || []), ...(bmRaw || [])];
-    const preFiltered = allPosts.filter(post => !isBlacklisted(post));
+    const preFiltered = [...redditData, ...bmData].filter(post => !isBlacklisted(post));
     
     const toAnalyze = preFiltered.filter(p => !p.isStub);
     const stubs = preFiltered.filter(p => p.isStub);
     
-    // Show stubs (BM posts) immediately
     posts.value = stubs; 
 
-    // Analyze Reddit posts
+    buttonText.value = 'AI Analysis...';
     await analyzePostsWithGemini(toAnalyze, apiKey.value, (chunk) => {
-      // Re-filter after AI adds new tags
       const safeChunk = (chunk || []).filter(post => !isBlacklisted(post));
       posts.value = [...posts.value, ...safeChunk];
     });
 
-    statusMessage.value = 'Sync Complete';
+    statusMessage.value = 'Feed refreshed.';
   } catch (e) {
-    statusMessage.value = "Connection Error";
+    statusMessage.value = "Connection error.";
     isError.value = true;
   } finally {
     isLoading.value = false;
-  }
-};
-
-const scanSinglePost = async (post) => {
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(post.url)}`;
-  try {
-    const resp = await fetch(proxyUrl);
-    const html = await resp.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const postBody = doc.querySelector('.postcolor')?.textContent || "No text found";
-    post.content = postBody;
-    post.isStub = false;
-    const analyzed = await analyzePostsWithGemini([post], apiKey.value);
-    const index = posts.value.findIndex(p => p.id === post.id);
-    if (index !== -1) posts.value[index] = analyzed[0];
-  } catch (e) {
-    console.error("Single scan failed", e);
+    buttonText.value = '';
   }
 };
 </script>
