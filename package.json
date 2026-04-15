@@ -10,7 +10,7 @@
   "dependencies": {
     "vue": "^3.4.0",
     "pinia": "^2.1.0",
-    "@google/generative-ai": "^0.2.1"
+    "@google/generative-ai": "latest"
   },
   "devDependencies": {
     "vite": "^5.1.0",
