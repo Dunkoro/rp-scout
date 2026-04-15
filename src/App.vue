@@ -3,9 +3,7 @@
     <header id="mobile-header">
       <button class="menu-toggle" @click="isSidebarOpen = !isSidebarOpen">☰</button>
       <h1>RP Scout</h1>
-      <button class="refresh-mini" @click="fetchAndAnalyze" :disabled="isLoading">
-        {{ isLoading ? '...' : '↻' }}
-      </button>
+      <button class="refresh-mini" @click="fetchAndAnalyze" :disabled="isLoading">↻</button>
     </header>
 
     <aside id="sidebar">
@@ -19,9 +17,9 @@
           </div>
 
           <div class="input-group">
-            <label>Blacklist Manager</label>
+            <label>Blacklist</label>
             <div class="add-tag-row">
-              <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" placeholder="Type tag or u/user...">
+              <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" placeholder="Block tag or u/user...">
               <button class="add-btn" @click="addCustomFilter">+</button>
             </div>
             <div class="blacklist-pills">
@@ -32,7 +30,7 @@
           </div>
 
           <div class="input-group">
-            <label>Reddit Subs</label>
+            <label>Reddit Subreddits</label>
             <input v-model="subs" type="text">
           </div>
 
@@ -56,7 +54,7 @@
         <header class="feed-info">
           <span class="count-badge"><b>{{ filteredPosts.length }}</b> Results</span>
           <span v-if="posts.length > filteredPosts.length" class="filter-count">
-            {{ posts.length - filteredPosts.length }} hidden by blacklist
+            {{ posts.length - filteredPosts.length }} pre-filtered or blacklisted
           </span>
         </header>
 
@@ -71,7 +69,7 @@
               <h3 class="post-title"><a :href="post.url" target="_blank">{{ post.title }}</a></h3>
               
               <div v-if="post.ai" class="ai-summary-box">
-                <p>{{ post.ai.summary }}</p>
+                <p class="summary-text">{{ post.ai.summary }}</p>
                 <div class="ai-tags">
                   <span class="ai-tag pairing" @click="toggleFilter(post.ai.pairing)">{{ post.ai.pairing }}</span>
                   <span class="ai-tag platform" @click="toggleFilter(post.ai.platform)">{{ post.ai.platform }}</span>
@@ -120,7 +118,6 @@ onMounted(() => {
   bmIds.value = localStorage.getItem('rp_scout_bm') || '1+45';
   const savedFilters = localStorage.getItem('rp_scout_blacklist');
   if (savedFilters) activeFilters.value = JSON.parse(savedFilters);
-
   if (apiKey.value) fetchAndAnalyze();
 });
 
@@ -145,10 +142,11 @@ const addCustomFilter = () => {
   }
 };
 
+// Unified display filter
 const filteredPosts = computed(() => {
   return posts.value.filter(post => {
-    const postTags = [post.author, post.source, ...(post.ai ? [post.ai.pairing, post.ai.platform, post.ai.type, post.ai.fandom, ...(post.ai.tags || [])] : [])];
-    return !activeFilters.value.some(f => postTags.includes(f));
+    const postData = [post.author, post.source, post.title, ...(post.ai ? [post.ai.pairing, post.ai.platform, post.ai.type, post.ai.fandom, ...(post.ai.tags || [])] : [])];
+    return !activeFilters.value.some(f => postData.some(pd => pd?.toLowerCase().includes(f.toLowerCase())));
   });
 });
 
@@ -157,16 +155,25 @@ const fetchAndAnalyze = async () => {
   isLoading.value = true;
   isError.value = false;
   posts.value = [];
+  
   try {
-    buttonText.value = 'Connecting...';
+    buttonText.value = 'Fetching...';
     const [redditRaw, bmRaw] = await Promise.all([
       fetchPostsFromSubreddits(subs.value),
       scrapeBarbermonger(bmIds.value)
     ]);
     
     const allRaw = [...redditRaw, ...bmRaw];
-    const toAnalyze = allRaw.filter(p => !p.isStub);
-    const stubs = allRaw.filter(p => p.isStub);
+
+    // --- NEW PRE-FILTER STEP ---
+    // Instantly drop any post where the Author or Title matches the blacklist
+    const cleanRaw = allRaw.filter(post => {
+      const basicData = [post.author, post.title];
+      return !activeFilters.value.some(f => basicData.some(bd => bd?.toLowerCase().includes(f.toLowerCase())));
+    });
+
+    const toAnalyze = cleanRaw.filter(p => !p.isStub);
+    const stubs = cleanRaw.filter(p => p.isStub);
     
     posts.value = stubs; 
 
@@ -175,7 +182,7 @@ const fetchAndAnalyze = async () => {
       posts.value = [...posts.value, ...chunk];
     });
 
-    statusMessage.value = 'Feed up to date.';
+    statusMessage.value = 'Feed updated.';
   } catch (e) {
     statusMessage.value = "Error: " + e.message;
     isError.value = true;
@@ -205,216 +212,90 @@ const scanSinglePost = async (post) => {
 </script>
 
 <style>
-/* THE NUCLEAR RESET 
-   Ensures browser defaults are nuked and our styles win.
-*/
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg-main: #0a0a0b;
-  --bg-side: #121214;
-  --bg-card: #1c1c1f;
-  --bg-input: #252529;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --danger: #ef4444;
+  --bg-main: #0a0a0b; --bg-side: #121214; --bg-card: #1c1c1f;
+  --bg-input: #252529; --accent: #3b82f6; --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af; --danger: #ef4444;
 }
 
 body {
-  background-color: var(--bg-main);
-  color: var(--text-primary);
-  font-family: 'Inter', -apple-system, system-ui, sans-serif;
-  overflow: hidden;
-  height: 100vh;
+  background-color: var(--bg-main); color: var(--text-primary);
+  font-family: 'Inter', -apple-system, sans-serif; overflow: hidden;
 }
 
-#app-container {
-  display: flex;
-  height: 100vh;
-  width: 100vw;
-}
+#app-container { display: flex; height: 100vh; width: 100vw; }
 
-/* SIDEBAR STRUCTURE */
+/* SIDEBAR */
 #sidebar {
-  width: 320px;
-  min-width: 320px;
-  background-color: var(--bg-side);
-  border-right: 1px solid #27272a;
-  display: flex;
-  flex-direction: column;
+  width: 320px; min-width: 320px; background-color: var(--bg-side);
+  border-right: 1px solid #27272a; display: flex; flex-direction: column;
 }
 
-.sidebar-inner {
-  padding: 32px 24px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.logo {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 32px;
-  color: var(--accent);
-  letter-spacing: -0.025em;
-}
-
+.sidebar-inner { padding: 32px 24px; display: flex; flex-direction: column; height: 100%; }
+.logo { font-size: 1.5rem; font-weight: 700; margin-bottom: 32px; color: var(--accent); }
 .form-section { flex-grow: 1; overflow-y: auto; }
-
-.input-group { 
-  margin-bottom: 24px; 
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+.input-group { margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
+label { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; }
 
 input {
-  width: 100%;
-  padding: 12px 16px;
-  background-color: var(--bg-input);
-  border: 1px solid #3f3f46;
-  border-radius: 8px;
-  color: white;
-  font-family: inherit;
-  font-size: 0.9rem;
+  width: 100%; padding: 12px; background-color: var(--bg-input);
+  border: 1px solid #3f3f46; border-radius: 8px; color: white;
 }
 
-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-.add-tag-row { display: flex; gap: 8px; }
-.add-btn {
-  background: #3f3f46;
-  border: none;
-  color: white;
-  width: 42px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-/* PILLS */
-.blacklist-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
+.blacklist-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .pill {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--danger);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; cursor: pointer;
 }
-
-.pill:hover { background: var(--danger); color: white; }
 
 .main-btn {
-  width: 100%;
-  padding: 14px;
-  background-color: var(--accent);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
+  width: 100%; padding: 14px; background-color: var(--accent); color: white;
+  border: none; border-radius: 10px; font-weight: 600; cursor: pointer;
 }
 
-.status-msg { font-size: 0.8rem; margin-top: 12px; color: var(--text-secondary); text-align: center; }
-.status-msg.error { color: var(--danger); }
-
-/* FEED STRUCTURE */
-#feed {
-  flex-grow: 1;
-  overflow-y: auto;
-  padding: 40px;
-}
-
+/* FEED */
+#feed { flex-grow: 1; overflow-y: auto; padding: 40px; }
 .feed-container { max-width: 850px; margin: 0 auto; }
-
-.feed-info {
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.count-badge { background: #27272a; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; }
-.filter-count { font-size: 0.85rem; color: var(--text-secondary); }
+.feed-info { margin-bottom: 24px; color: var(--text-secondary); font-size: 0.85rem; }
 
 /* CARDS */
 .post-card {
-  background: var(--bg-card);
-  border: 1px solid #27272a;
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 20px;
+  background: var(--bg-card); border: 1px solid #27272a;
+  border-radius: 16px; padding: 24px; margin-bottom: 20px;
 }
 
-.post-meta { display: flex; gap: 12px; font-size: 0.75rem; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); }
-.user-tag { color: var(--accent); cursor: pointer; }
+.post-meta { display: flex; gap: 12px; font-size: 0.75rem; margin-bottom: 12px; color: var(--text-secondary); }
+.user-tag { color: var(--accent); cursor: pointer; font-weight: bold; }
 
-.post-title { margin: 0 0 16px 0; font-size: 1.25rem; }
-.post-title a { color: white; text-decoration: none; line-height: 1.4; }
+.post-title { margin-bottom: 16px; font-size: 1.25rem; }
+.post-title a { color: white; text-decoration: none; }
+.post-title a:hover { color: var(--accent); }
 
+/* AI BOX & TAGS */
 .ai-summary-box {
-  background: #121214;
-  padding: 16px;
-  border-radius: 12px;
-  border-left: 4px solid var(--accent);
+  background: #121214; padding: 16px; border-radius: 12px; border-left: 4px solid var(--accent);
 }
-
-.ai-summary-box p { margin-bottom: 12px; font-size: 0.95rem; line-height: 1.6; color: #d1d5db; }
+.summary-text { margin-bottom: 15px; font-size: 0.95rem; line-height: 1.6; color: #d1d5db; }
 
 .ai-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.ai-tag { background: #27272a; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
+.ai-tag {
+  background: #27272a; padding: 5px 12px; border-radius: 6px;
+  font-size: 0.75rem; font-weight: 700; cursor: pointer; color: #eee;
+}
+.ai-tag:hover { background: #3f3f46; }
 
+/* Fandom Colors */
 .ai-tag.fandom.fandom-canon { background: var(--danger); color: white; }
 .ai-tag.fandom.is-celebrity { background: #9333ea; color: white; }
 
-.scan-single-btn { width: 100%; padding: 10px; background: #27272a; color: white; border: 1px solid #3f3f46; border-radius: 8px; cursor: pointer; }
-
-/* MOBILE HEADER */
+/* MOBILE */
 #mobile-header { display: none; }
-
 @media (max-width: 768px) {
-  #mobile-header {
-    display: flex; position: fixed; top: 0; left: 0; right: 0; height: 64px;
-    background: var(--bg-side); border-bottom: 1px solid #27272a;
-    align-items: center; justify-content: space-between; padding: 0 20px; z-index: 100;
-  }
-  #sidebar { position: fixed; top: 0; left: 0; bottom: 0; transform: translateX(-100%); transition: transform 0.3s; z-index: 200; }
+  #mobile-header { display: flex; position: fixed; top: 0; left: 0; right: 0; height: 60px; background: var(--bg-side); align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #333; }
+  #sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); transition: 0.3s; z-index: 200; }
   #app-container.sidebar-open #sidebar { transform: translateX(0); }
-  #feed { padding: 84px 20px 20px; }
+  #feed { padding-top: 80px; }
 }
-
-.post-anim-enter-active { transition: all 0.3s ease-out; }
-.post-anim-enter-from { opacity: 0; transform: translateY(20px); }
 </style>
