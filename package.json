@@ -1,1 +1,39 @@
-{\n  \"name\": \"rp-scout\",\n  \"version\": \"1.0.0\",\n  \"description\": \"A Vue 3 project using Vite and Axios with PWA capabilities\",\n  \"main\": \"index.js\",\n  \"scripts\": {\n    \"dev\": \"vite\",\n    \"build\": \"vite build\",\n    \"serve\": \"vite preview\"\n  },\n  \"dependencies\": {\n    \"vue\": \"^3.0.0\",\n    \"axios\": \"^0.21.1\"\n  },\n  \"devDependencies\": {\n    \"vite\": \"^2.0.0\",\n    \"@vite-pwa/plugin\": \"^0.11.0\"\n  },\n  \"pwa\": {\n    \"name\": \"rp-scout\",\n    \"short_name\": \"Scout\",\n    \"description\": \"Vue 3 PWA\",\n    \"icons\": [\n      {\n        \"src\": \"/icon-192.png\",\n        \"sizes\": \"192x192\",\n        \"type\": \"image/png\"\n      },\n      {\n        \"src\": \"/icon-512.png\",\n        \"sizes\": \"512x512\",\n        \"type\": \"image/png\"\n      }\n    ],\n    \"theme_color\": \"#ffffff\",\n    \"background_color\": \"#ffffff\",\n    \"display\": \"standalone\"\n  }\n}
+{
+  "name": "rp-scout",
+  "version": "1.0.0",
+  "description": "A Vue 3 project using Vite and Axios with PWA capabilities",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.0.0",
+    "axios": "^0.21.1"
+  },
+  "devDependencies": {
+    "vite": "^2.0.0",
+    "@vite-pwa/plugin": "^0.11.0"
+  },
+  "pwa": {
+    "name": "rp-scout",
+    "short_name": "Scout",
+    "description": "Vue 3 PWA",
+    "icons": [
+      {
+        "src": "/icon-192.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "/icon-512.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ],
+    "theme_color": "#ffffff",
+    "background_color": "#121212",
+    "display": "standalone"
+  }
+}
