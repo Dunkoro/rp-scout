@@ -9,8 +9,8 @@
       </div>
 
       <div class="input-group">
-        <label>Barbermonger RSS URL</label>
-        <input v-model="bmFeed" type="text" placeholder="https://barbermonger.me/index.php?act=rssout&id=2">
+        <label>Barbermonger Forum IDs (separated by +)</label>
+        <input v-model="bmForums" type="text" placeholder="1+45">
       </div>
       
       <button @click="fetchPosts" :disabled="isLoading">
