@@ -7,6 +7,11 @@
         <label>Subreddits (separated by +)</label>
         <input v-model="subs" type="text" placeholder="RoleplayPartnerSearch+Roleplay">
       </div>
+
+      <div class="input-group">
+        <label>Barbermonger RSS URL</label>
+        <input v-model="bmFeed" type="text" placeholder="https://barbermonger.me/index.php?act=rssout&id=2">
+      </div>
       
       <button @click="fetchPosts" :disabled="isLoading">
         {{ isLoading ? 'Fetching...' : 'Find Posts' }}
@@ -22,11 +27,11 @@
         <div v-for="post in posts" :key="post.id" class="rp-card">
           <h3><a :href="post.url" target="_blank">{{ post.title }}</a></h3>
           
-          <p class="post-summary">{{ post.content.substring(0, 150) }}...</p>
+          <p class="post-summary">{{ post.content.substring(0, 200) }}...</p>
           
           <div class="tag-container">
-            <span class="tag author">u/{{ post.author }}</span>
-            <span class="tag subreddit">r/{{ post.subreddit }}</span>
+            <span class="tag author">@{{ post.author }}</span>
+            <span class="tag source">{{ post.source }}</span>
           </div>
         </div>
       </div>
@@ -37,22 +42,29 @@
 <script setup>
 import { ref } from 'vue';
 import { fetchPostsFromSubreddits } from './services/redditFetcher.js';
+import { fetchBarbermongerPosts } from './services/barbermongerFetcher.js';
 
-// Reactive State Variables
 const subs = ref('RoleplayPartnerSearch+Roleplay');
+const bmFeed = ref('https://barbermonger.me/index.php?act=rssout&id=2');
 const posts = ref([]);
 const isLoading = ref(false);
 const statusMessage = ref('');
 
-// The Fetch Action
 const fetchPosts = async () => {
-  if (!subs.value) return;
+  if (!subs.value && !bmFeed.value) return;
   
   isLoading.value = true;
-  statusMessage.value = 'Fetching Reddit...';
+  statusMessage.value = 'Fetching data...';
   
   try {
-    posts.value = await fetchPostsFromSubreddits(subs.value);
+    // Fetch both sources concurrently
+    const [redditData, bmData] = await Promise.all([
+      subs.value ? fetchPostsFromSubreddits(subs.value) : Promise.resolve([]),
+      bmFeed.value ? fetchBarbermongerPosts(bmFeed.value) : Promise.resolve([])
+    ]);
+
+    // Merge arrays
+    posts.value = [...redditData, ...bmData];
     statusMessage.value = 'Done!';
   } catch (error) {
     statusMessage.value = 'Error fetching posts. Check console.';
@@ -93,5 +105,5 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .tag-container { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; }
 .tag { background: #333; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
 .tag.author { background: #5c2d91; }
-.tag.subreddit { background: #7289da; }
+.tag.source { background: #7289da; }
 </style>
