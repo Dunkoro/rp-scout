@@ -15,13 +15,13 @@
         <div class="form-section">
           <div class="input-group">
             <label>Gemini API Key</label>
-            <input v-model="apiKey" type="password" placeholder="Paste key here...">
+            <input v-model="apiKey" type="password" placeholder="AIzaSy...">
           </div>
 
           <div class="input-group">
-            <label>Blacklist</label>
+            <label>Blacklist Manager</label>
             <div class="add-tag-row">
-              <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" placeholder="Block tag/user...">
+              <input v-model="newBlacklistTag" @keyup.enter="addCustomFilter" placeholder="Type tag or u/user...">
               <button class="add-btn" @click="addCustomFilter">+</button>
             </div>
             <div class="blacklist-pills">
@@ -32,7 +32,7 @@
           </div>
 
           <div class="input-group">
-            <label>Reddit Subreddits</label>
+            <label>Reddit Subs</label>
             <input v-model="subs" type="text">
           </div>
 
@@ -44,7 +44,7 @@
 
         <div class="sidebar-footer">
           <button @click="fetchAndAnalyze" :disabled="isLoading" class="main-btn">
-            {{ isLoading ? (buttonText || 'Scouting...') : 'Refresh Feed' }}
+            {{ isLoading ? (buttonText || 'Thinking...') : 'Refresh Feed' }}
           </button>
           <p class="status-msg" :class="{ error: isError }">{{ statusMessage }}</p>
         </div>
@@ -85,79 +85,4 @@
                 </div>
               </div>
 
-              <div v-else-if="post.isStub" class="stub-actions">
-                <button class="scan-single-btn" @click="scanSinglePost(post)">Analyze with Gemini</button>
-              </div>
-            </div>
-          </TransitionGroup>
-        </div>
-      </div>
-    </main>
-  </div>
-</template>
-
-<script setup>
-import { ref, computed, onMounted, watch } from 'vue';
-import { fetchPostsFromSubreddits } from './services/redditFetcher.js';
-import { analyzePostsWithGemini } from './services/geminiService.js';
-import { scrapeBarbermonger } from './services/barbermongerScraper.js';
-
-const apiKey = ref('');
-const subs = ref('RoleplayPartnerSearch+Roleplay');
-const bmIds = ref('1+45');
-const posts = ref([]);
-const isLoading = ref(false);
-const isSidebarOpen = ref(false);
-const statusMessage = ref('');
-const buttonText = ref('');
-const isError = ref(false);
-const activeFilters = ref([]);
-const newBlacklistTag = ref('');
-
-onMounted(() => {
-  apiKey.value = localStorage.getItem('gemini_api_key') || '';
-  subs.value = localStorage.getItem('rp_scout_subs') || 'RoleplayPartnerSearch+Roleplay';
-  bmIds.value = localStorage.getItem('rp_scout_bm') || '1+45';
-  const savedFilters = localStorage.getItem('rp_scout_blacklist');
-  if (savedFilters) activeFilters.value = JSON.parse(savedFilters);
-
-  if (apiKey.value) fetchAndAnalyze();
-});
-
-watch([apiKey, subs, bmIds, activeFilters], () => {
-  localStorage.setItem('gemini_api_key', apiKey.value);
-  localStorage.setItem('rp_scout_subs', subs.value);
-  localStorage.setItem('rp_scout_bm', bmIds.value);
-  localStorage.setItem('rp_scout_blacklist', JSON.stringify(activeFilters.value));
-}, { deep: true });
-
-const toggleFilter = (tag) => {
-  if (!tag) return;
-  const index = activeFilters.value.indexOf(tag);
-  if (index === -1) activeFilters.value.push(tag);
-  else activeFilters.value.splice(index, 1);
-};
-
-const addCustomFilter = () => {
-  if (newBlacklistTag.value.trim()) {
-    toggleFilter(newBlacklistTag.value.trim());
-    newBlacklistTag.value = '';
-  }
-};
-
-const filteredPosts = computed(() => {
-  return posts.value.filter(post => {
-    const postTags = [post.author, post.source, ...(post.ai ? [post.ai.pairing, post.ai.platform, post.ai.type, post.ai.fandom, ...(post.ai.tags || [])] : [])];
-    return !activeFilters.value.some(f => postTags.includes(f));
-  });
-});
-
-const fetchAndAnalyze = async () => {
-  if (!apiKey.value) return;
-  isLoading.value = true;
-  posts.value = [];
-  try {
-    buttonText.value = 'Fetching...';
-    const [redditRaw, bmRaw] = await Promise.all([
-      fetchPostsFromSubreddits(subs.value),
-      scrapeBarbermonger(bmIds.value)
+              <div v-else-if="post.isStub" class="
